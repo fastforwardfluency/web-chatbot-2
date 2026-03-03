@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { 
   Send, 
@@ -11,8 +11,6 @@ import {
   Globe,
   Loader2,
   ArrowRight,
-  Mic,
-  MicOff,
   Volume2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -87,6 +85,7 @@ export default function App() {
           { role: 'user', parts: [{ text: input }] }
         ],
         config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           systemInstruction: `You are the Fast Forward Fluency Assistant. Your motto is "More than English." 
           Your mission is to transform language learning into professional confidence using a neuroscience-based approach.
           
@@ -141,7 +140,6 @@ export default function App() {
           
           Always be warm, professional, and encouraging. 
           **CRITICAL RESPONSE LENGTH RULE**: Provide very short, concise answers at first. If the user asks for more details, follows up on a topic, or says "tell me more," elaborate more in each subsequent response.`,
-          tools: [{ urlContext: {} }],
         }
       });
 
@@ -176,7 +174,7 @@ export default function App() {
         }
         
         if (!streamFinished || displayedText.length < fullText.length) {
-          setTimeout(updateDisplay, 25); // ~40 updates per second
+          setTimeout(updateDisplay, 40); // Slower updates (40ms instead of 10ms)
         }
       };
 
@@ -243,22 +241,19 @@ export default function App() {
 
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
-        const binaryString = atob(base64Audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
+        // Faster base64 to Uint8Array conversion
+        const bytes = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0));
         
         if (bytes.length % 2 !== 0) {
           setIsReadingAloud(null);
           return;
         }
 
-        // TTS returns raw PCM 16-bit
+        // TTS returns raw PCM 16-bit. Optimized conversion to Float32.
         const pcmData = new Int16Array(bytes.buffer);
         const floatData = new Float32Array(pcmData.length);
         for (let i = 0; i < pcmData.length; i++) {
-          floatData[i] = pcmData[i] / 32768;
+          floatData[i] = pcmData[i] * 0.000030517578125; // Equivalent to / 32768 but faster multiplication
         }
 
         const buffer = audioContext.createBuffer(1, floatData.length, 24000);
@@ -387,7 +382,7 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about Fast Forward Fluency..."
+              placeholder="Ask anything about Fast Forward Fluency... "
               className="w-full pl-6 pr-16 py-3 sm:py-4 bg-brand-surface border border-white/5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:bg-brand-surface transition-all text-base sm:text-sm text-brand-text placeholder:text-[9px] sm:placeholder:text-sm placeholder:text-brand-text-muted disabled:opacity-50"
             />
             <div className="absolute right-2 flex items-center gap-2">
