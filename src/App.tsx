@@ -77,7 +77,7 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const streamResponse = await ai.models.generateContentStream({
+      const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [
           ...messages.map(m => ({
@@ -145,55 +145,14 @@ export default function App() {
         }
       });
 
-      const modelMessageId = (Date.now() + 1).toString();
-      let fullText = "";
-      let displayedText = "";
-      let streamFinished = false;
-
-      // Initial empty message to show loading state is over and text is coming
-      setMessages(prev => [...prev, {
-        id: modelMessageId,
+      const modelMessage: Message = {
+        id: (Date.now() + 1).toString(),
         role: 'model',
-        text: "",
+        text: response.text || "I'm sorry, I couldn't process that. Could you try again?",
         timestamp: new Date(),
-      }]);
-
-      setIsLoading(false);
-
-      // Typewriter effect to make text appear "written" slowly
-      const updateDisplay = () => {
-        if (displayedText.length < fullText.length) {
-          // Calculate how many characters to add. 
-          // If we're falling behind, we add more characters to keep up, but still maintain the "writing" feel.
-          const diff = fullText.length - displayedText.length;
-          const charsToAdd = diff > 50 ? Math.ceil(diff / 5) : 1;
-          
-          displayedText += fullText.substring(displayedText.length, displayedText.length + charsToAdd);
-          
-          setMessages(prev => prev.map(msg => 
-            msg.id === modelMessageId ? { ...msg, text: displayedText } : msg
-          ));
-        }
-        
-        if (!streamFinished || displayedText.length < fullText.length) {
-          setTimeout(updateDisplay, 25); // ~40 updates per second
-        }
       };
 
-      updateDisplay();
-
-      for await (const chunk of streamResponse) {
-        if (chunk.text) {
-          fullText += chunk.text;
-        }
-      }
-      streamFinished = true;
-
-      if (!fullText) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === modelMessageId ? { ...msg, text: "I'm sorry, I couldn't process that. Could you try again?" } : msg
-        ));
-      }
+      setMessages(prev => [...prev, modelMessage]);
     } catch (error) {
       console.error("Error calling Gemini:", error);
       const errorMessage: Message = {
@@ -214,35 +173,23 @@ export default function App() {
     try {
       setIsReadingAloud(messageId);
       
-      // Prime the media channel on mobile browsers so volume buttons work correctly
-      const primer = document.getElementById('media-primer') as HTMLAudioElement;
-      if (primer) {
-        primer.src = "data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-        primer.play().catch(() => {});
-      }
-      
-      // Start API call and audio context resume in parallel for maximum speed
-      const [response, audioContext] = await Promise.all([
-        ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: text }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Zephyr' },
-              },
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Zephyr' },
             },
           },
-        }),
-        getAudioContext().then(async (ctx) => {
-          if (ctx.state === 'suspended') await ctx.resume();
-          return ctx;
-        })
-      ]);
+        },
+      });
 
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
+        const audioContext = await getAudioContext();
+        
         const binaryString = atob(base64Audio);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -258,7 +205,7 @@ export default function App() {
         const pcmData = new Int16Array(bytes.buffer);
         const floatData = new Float32Array(pcmData.length);
         for (let i = 0; i < pcmData.length; i++) {
-          floatData[i] = pcmData[i] / 32768;
+          floatData[i] = pcmData[i] / 0x7FFF;
         }
 
         const buffer = audioContext.createBuffer(1, floatData.length, 24000);
@@ -270,7 +217,7 @@ export default function App() {
         source.onended = () => {
           setIsReadingAloud(null);
         };
-        source.start(0);
+        source.start();
       } else {
         setIsReadingAloud(null);
       }
@@ -315,9 +262,6 @@ export default function App() {
         </a>
       </header>
 
-      {/* Hidden audio element to prime media channel on mobile */}
-      <audio id="media-primer" className="hidden" aria-hidden="true" />
-      
       {/* Chat Area */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 bg-brand-dark">
         <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
@@ -387,8 +331,8 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about Fast Forward Fluency..."
-              className="w-full pl-6 pr-16 py-3 sm:py-4 bg-brand-surface border border-white/5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:bg-brand-surface transition-all text-base sm:text-sm text-brand-text placeholder:text-[9px] sm:placeholder:text-sm placeholder:text-brand-text-muted disabled:opacity-50"
+              placeholder="Ask anything about Fast Forward Fluency..."
+              className="w-full pl-6 pr-16 py-3 sm:py-4 bg-brand-surface border border-white/5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:bg-brand-surface transition-all text-sm text-brand-text placeholder:text-[10px] sm:placeholder:text-sm placeholder:text-brand-text-muted disabled:opacity-50"
             />
             <div className="absolute right-2 flex items-center gap-2">
               <button
