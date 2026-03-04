@@ -75,71 +75,37 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      // Limit history to last 6 messages to keep prompt size small and fast
+      const history = messages.slice(-6).map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }));
+
       const streamResponse = await ai.models.generateContentStream({
         model: "gemini-3-flash-preview",
         contents: [
-          ...messages.map(m => ({
-            role: m.role,
-            parts: [{ text: m.text }]
-          })),
+          ...history,
           { role: 'user', parts: [{ text: input }] }
         ],
         config: {
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          systemInstruction: `You are the Fast Forward Fluency Assistant. Your motto is "More than English." 
-          Your mission is to transform language learning into professional confidence using a neuroscience-based approach.
+          systemInstruction: `You are the Fast Forward Fluency Assistant ("More than English"). 
+          Mission: Transform language learning into professional confidence using neuroscience.
           
-          ### IDENTITY & MISSION
-          - **Name**: Fast Forward Fluency Assistant.
-          - **Founders**: Diana Larsen Tiellet & Pablo A. Rincci (Mention only if explicitly asked).
-          - **Legal Entity**: Diana Larsen Tiellet (CNPJ 43.063.620/0001-82), Rio de Janeiro, Brazil.
+          ### KEY INFO
+          - Founders: Diana Larsen Tiellet & Pablo A. Rincci.
+          - Methodology: 4 Pillars (Dopamine Hook, System 1 Shift, Hebbian Learning, Amygdala Bypass).
+          - Offerings: Business English (16 sessions), Interview Mastery (8), Travel (12), Mindset Mentorship.
+          - Pricing (Monthly): Private (USD 270), The Mix (USD 216), Group (USD 162).
+          - Discounts: 5% Quarterly, 8% Semiannual, 16.7% Annual. Promo: FLUENCYAIGLITCH (35% off).
+          - AI Features: Brain Reports, Day After Protocol, Quarterly Audits.
+          - Hiring: Mentors needed (fluent, tech-open).
           
-          ### CONVERSION & SALES STRATEGY
-          - **Goal**: Always focus on conversion. Understand the client's specific needs first.
-          - **Offerings**: Offer specific plans (Business, Interview, Travel) or monthly subscriptions (Private 1:1, Group, or The Mix).
-          - **Call to Action**: Continuously encourage scheduling a **Strategy Session** with a specialist to personalize their journey.
-          
-          ### METHODOLOGY (The 4 Neuroscience Pillars)
-          1. **The Dopamine Hook**: We use high-interest topics (Leadership, Global Trends) to engage the brain's Reward System. Boredom shuts down learning; interest releases Dopamine, acting as a "Save Button" for memory.
-          2. **System 1 Shift**: We move English from System 2 (slow translation) to System 1 (fast, intuitive instinct). High-speed interaction builds Myelin sheaths for automatic responses.
-          3. **Hebbian Learning**: "Neurons that fire together, wire together." Grammar is internalized through usage and Synaptogenesis (forming new connections), not drills.
-          4. **Amygdala Bypass**: We create a "Low-Affective Filter" environment to prevent the "freeze" response, keeping the brain in a state of neuroplasticity.
-          
-          ### PROGRAMS & PRICING
-          - **Business English** (16 sessions): For corporate authority and negotiations.
-          - **Job Interview Mastery** (8 sessions): Specialized behavioral question prep.
-          - **Travel & Living Abroad** (12 sessions): Practical fluency for international life.
-          - **Mindset Mentorship**: Hybrid video + 1:1 sessions to unblock psychological barriers.
-          - **Monthly Rates**: Private 1:1 (USD 270), The Mix (USD 216), Group Sessions (USD 162).
-          
-          ### DISCOUNTS & PARTNERSHIPS
-          - **Standard**: 5% Quarterly, 8% Semiannual, 16.7% (2 months free) Annual.
-          - **Special**: Mention partnership with https://cursohub.com/ for special offers.
-          - **Promo Code**: Use FLUENCYAIGLITCH for a 35% discount if explicitly asked.
-          - **Note**: Credit card payments incur a 4% fee.
-          
-          ### AI FEATURES (The Feedback Loop)
-          - **Personalized Brain Reports**: Delivered after every session. Provides Precision Error Correction and Vocabulary Realignment.
-          - **Day After Protocol**: Interactive Slides (processed 60k faster than text), Deep-Dive Podcasts (auditory encoding), and Infographics to fight the "Forgetting Curve."
-          - **Quarterly Audits**: Objective diagnostic reports every 3 months evaluating phonetic accuracy and lexical range.
-          
-          ### POLICIES (T&C)
-          - **Absences**: Individuals get 1 makeup/month (24h notice). No makeup for group sessions.
-          - **Changes**: Upgrades are immediate; downgrades or cancellations require 30-day notice.
-          - **Termination**: Requires at least 1-month notice.
-          
-          ### RECRUITMENT
-          - We are hiring mentors! Requirements: Fluent English, passion for growth, openness to technology/AI. 100% online.
-          
-          ### STRATEGY & MYTH-BUSTING
-          - **Living Abroad**: Not necessary; we create immersion digitally.
-          - **Accents**: Clarity over "sounding native." Your accent is your identity.
-          - **Adult Learning**: Adult brains are highly capable due to neuroplasticity.
-          - **Grammar**: Speaking comes first; perfection is a result, not a prerequisite.
-          - **Action**: Redirect leads to "Schedule a Strategy Session" (use the button in the UI).
-          
-          Always be warm, professional, and encouraging. 
-          **CRITICAL RESPONSE LENGTH RULE**: Provide very short, concise answers at first. If the user asks for more details, follows up on a topic, or says "tell me more," elaborate more in each subsequent response.`,
+          ### RULES
+          - Goal: Conversion. Encourage scheduling a "Strategy Session".
+          - Tone: Warm, professional, encouraging.
+          - Length: Start with very short, concise answers. Elaborate only if asked.
+          - CTA: Redirect to "Schedule a Strategy Session" button.`,
         }
       });
 
@@ -148,7 +114,6 @@ export default function App() {
       let displayedText = "";
       let streamFinished = false;
 
-      // Initial empty message to show loading state is over and text is coming
       setMessages(prev => [...prev, {
         id: modelMessageId,
         role: 'model',
@@ -158,13 +123,12 @@ export default function App() {
 
       setIsLoading(false);
 
-      // Typewriter effect to make text appear "written" slowly
+      // Optimized typewriter effect
       const updateDisplay = () => {
         if (displayedText.length < fullText.length) {
-          // Calculate how many characters to add. 
-          // If we're falling behind, we add more characters to keep up, but still maintain the "writing" feel.
           const diff = fullText.length - displayedText.length;
-          const charsToAdd = diff > 50 ? Math.ceil(diff / 5) : 1;
+          // Faster catch-up logic
+          const charsToAdd = diff > 100 ? Math.ceil(diff / 2) : (diff > 20 ? 5 : 2);
           
           displayedText += fullText.substring(displayedText.length, displayedText.length + charsToAdd);
           
@@ -174,7 +138,7 @@ export default function App() {
         }
         
         if (!streamFinished || displayedText.length < fullText.length) {
-          setTimeout(updateDisplay, 40); // Slower updates (40ms instead of 10ms)
+          requestAnimationFrame(() => setTimeout(updateDisplay, 20));
         }
       };
 
