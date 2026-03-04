@@ -240,45 +240,12 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-brand-dark shadow-2xl overflow-hidden sm:my-8 sm:h-[calc(100vh-64px)] sm:rounded-3xl border border-white/5">
-      {/* Header */}
-      <header className="px-4 py-2 sm:px-6 sm:py-4 border-b border-white/5 bg-brand-surface/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3 w-full justify-center sm:w-auto sm:justify-start">
-          <div className="w-10 h-10 bg-[#1a1c1e] rounded-full flex items-center justify-center text-white shadow-lg border border-white/10 overflow-hidden">
-            <img 
-              src="https://fastforward-fluency.com/wp-content/uploads/2026/03/FFF-AI-logo-50x50p.png" 
-              alt="Fast Forward Fluency" 
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
-              }}
-              referrerPolicy="no-referrer"
-            />
-            <FastForward size={20} className="fallback-icon hidden" />
-          </div>
-          <div>
-            <h1 className="font-poppins text-xl font-bold tracking-tight text-brand-text">Fluency AI</h1>
-            <p className="text-[10px] uppercase tracking-widest text-brand-blue-light font-semibold">Fast Forward Fluency</p>
-          </div>
-        </div>
-        
-        <a 
-          href="https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ2MUuwNnC_UE1X9PXRnYZA2GAXAMDyQX2eYUI21M6ZfuQfYhNTc5GJpS-TgADlicugc0lrLMSWz" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hidden sm:flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-full text-sm font-medium hover:bg-brand-blue-light transition-all shadow-md hover:shadow-lg active:scale-95"
-        >
-          <Calendar size={16} />
-          Schedule a Strategy Session
-        </a>
-      </header>
-
+    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-brand-dark overflow-hidden sm:rounded-2xl border border-white/5">
       {/* Hidden audio element to prime media channel on mobile */}
       <audio id="media-primer" className="hidden" aria-hidden="true" />
       
       {/* Chat Area */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 bg-brand-dark">
+      <main className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 bg-brand-dark">
         <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
           <AnimatePresence initial={false}>
             {messages.map((message) => (
