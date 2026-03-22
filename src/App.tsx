@@ -11,7 +11,9 @@ import {
   Globe,
   Loader2,
   ArrowRight,
-  Volume2
+  Volume2,
+  Pause,
+  Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modality, LiveServerMessage } from "@google/genai";
@@ -38,9 +40,12 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState<string | null>(null);
+  const [isAudioPaused, setIsAudioPaused] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const audioContextRef = useRef<AudioContext | null>(null);
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const getAudioContext = async () => {
     if (!audioContextRef.current) {
@@ -178,53 +183,71 @@ export default function App() {
   };
 
   const readAloud = async (text: string, messageId: string) => {
-    if (isReadingAloud) return;
+    const audioContext = await getAudioContext();
+
+    if (isReadingAloud === messageId) {
+      // Toggle Pause/Resume
+      if (isAudioPaused) {
+        await audioContext.resume();
+        setIsAudioPaused(false);
+      } else {
+        await audioContext.suspend();
+        setIsAudioPaused(true);
+      }
+      return;
+    }
+
+    if (isReadingAloud || isAudioLoading) return;
     
     try {
-      setIsReadingAloud(messageId);
+      setIsAudioLoading(messageId);
+      setIsAudioPaused(false);
       
-      // Prime the media channel on mobile browsers so volume buttons work correctly
+      // Ensure context is resumed before starting new audio
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Clean markdown for better TTS and smaller payload
+      const cleanText = text
+        .replace(/[*_#`~>]/g, '') // Remove basic markdown
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links but keep text
+        .substring(0, 1000); // Limit to 1000 chars for speed and reliability
+
+      // Prime the media channel on mobile browsers
       const primer = document.getElementById('media-primer') as HTMLAudioElement;
       if (primer) {
         primer.src = "data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
         primer.play().catch(() => {});
       }
       
-      // Start API call and audio context resume in parallel for maximum speed
-      const [response, audioContext] = await Promise.all([
-        ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: text }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Zephyr' },
-              },
+      // Start API call
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: cleanText }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Zephyr' },
             },
           },
-        }),
-        getAudioContext().then(async (ctx) => {
-          if (ctx.state === 'suspended') await ctx.resume();
-          return ctx;
-        })
-      ]);
+        },
+      });
 
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
-        // Faster base64 to Uint8Array conversion
         const bytes = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0));
         
         if (bytes.length % 2 !== 0) {
-          setIsReadingAloud(null);
+          setIsAudioLoading(null);
           return;
         }
 
-        // TTS returns raw PCM 16-bit. Optimized conversion to Float32.
         const pcmData = new Int16Array(bytes.buffer);
         const floatData = new Float32Array(pcmData.length);
         for (let i = 0; i < pcmData.length; i++) {
-          floatData[i] = pcmData[i] * 0.000030517578125; // Equivalent to / 32768 but faster multiplication
+          floatData[i] = pcmData[i] * 0.000030517578125;
         }
 
         const buffer = audioContext.createBuffer(1, floatData.length, 24000);
@@ -233,16 +256,28 @@ export default function App() {
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
+        
+        setIsAudioLoading(null);
+        setIsReadingAloud(messageId);
+        
         source.onended = () => {
-          setIsReadingAloud(null);
+          if (currentAudioSourceRef.current === source) {
+            setIsReadingAloud(null);
+            setIsAudioPaused(false);
+            currentAudioSourceRef.current = null;
+          }
         };
+        currentAudioSourceRef.current = source;
         source.start(0);
       } else {
-        setIsReadingAloud(null);
+        setIsAudioLoading(null);
       }
     } catch (error) {
       console.error("TTS Error:", error);
+      setIsAudioLoading(null);
       setIsReadingAloud(null);
+      setIsAudioPaused(false);
+      currentAudioSourceRef.current = null;
     }
   };
 
@@ -278,13 +313,19 @@ export default function App() {
                       {message.role === 'model' && (
                         <button
                           onClick={() => readAloud(message.text, message.id)}
-                          disabled={isReadingAloud !== null}
+                          disabled={(isReadingAloud !== null || isAudioLoading !== null) && isReadingAloud !== message.id}
                           className={`p-1.5 rounded-lg transition-all hover:bg-white/10 ${
-                            isReadingAloud === message.id ? 'text-brand-blue-light animate-pulse' : 'text-brand-text-muted'
+                            isReadingAloud === message.id || isAudioLoading === message.id ? 'text-brand-blue-light' : 'text-brand-text-muted'
                           }`}
-                          title="Read Aloud"
+                          title={isReadingAloud === message.id ? (isAudioPaused ? "Resume" : "Pause") : "Read Aloud"}
                         >
-                          {isReadingAloud === message.id ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
+                          {isAudioLoading === message.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : isReadingAloud === message.id ? (
+                            isAudioPaused ? <Play size={14} className="fill-current" /> : <Pause size={14} className="fill-current" />
+                          ) : (
+                            <Volume2 size={14} />
+                          )}
                         </button>
                       )}
                     </div>
