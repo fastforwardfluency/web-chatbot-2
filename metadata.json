@@ -1,5 +1,5 @@
 {
-  "name": "FastForward Fluency AI Assistant",
-  "description": "A friendly AI chatbot for FastForward Fluency language school, answering questions about neuroscience-based English learning and driving class sign-ups.",
+  "name": "WA Business Chatbot",
+  "description": "Exclusively a WhatsApp Business Chatbot for FastForward Fluency, providing neuroscience-backed language learning info and class bookings.",
   "requestFramePermissions": []
 }
